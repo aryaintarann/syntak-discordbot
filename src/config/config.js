@@ -21,6 +21,10 @@ export default {
         clientSecret: process.env.SPOTIFY_CLIENT_SECRET
     },
 
+    // Shorthand references for easier access
+    spotifyClientId: process.env.SPOTIFY_CLIENT_ID,
+    spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+
     // Lyrics API
     genius: {
         apiKey: process.env.GENIUS_API_KEY

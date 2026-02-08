@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { useQueue } from 'discord-player';
+import logger from '../../utils/logger.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -8,34 +8,25 @@ export default {
         .setDMPermission(false),
 
     async execute(interaction) {
-        const queue = useQueue(interaction.guild.id);
+        const queue = interaction.client.distube.getQueue(interaction.guild.id);
 
-        if (!queue || !queue.currentTrack) {
+        if (!queue) {
             return interaction.reply({
                 content: '❌ Tidak ada lagu yang sedang diputar!',
                 ephemeral: true
             });
         }
 
-        const member = interaction.member;
-        if (!member.voice.channel) {
+        try {
+            await interaction.client.distube.skip(interaction.guild.id);
+            return interaction.reply('⏭️ Skipped to the next song!');
+        } catch (error) {
+            logger.error('Error in skip command:', error);
             return interaction.reply({
-                content: '❌ Kamu harus berada di voice channel yang sama dengan bot!',
+                content: `❌ Error skipping song: ${error.message}`,
                 ephemeral: true
             });
         }
-
-        if (member.voice.channel.id !== interaction.guild.members.me.voice.channel?.id) {
-            return interaction.reply({
-                content: '❌ Kamu harus berada di voice channel yang sama dengan bot!',
-                ephemeral: true
-            });
-        }
-
-        const currentTrack = queue.currentTrack;
-        queue.node.skip();
-
-        return interaction.reply(`⏭️ Skipped: **${currentTrack.title}**`);
     },
 
     cooldown: 2

@@ -1,5 +1,11 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
-import { Player } from 'discord-player';
+import { DisTube } from 'distube';
+import { SpotifyPlugin } from '@distube/spotify';
+import { YtDlpPlugin } from '@distube/yt-dlp';
+
+import ffmpeg from 'ffmpeg-static';
 import config from './config/config.js';
 import logger from './utils/logger.js';
 import { syncDatabase } from './database/index.js';
@@ -35,18 +41,54 @@ const client = new Client({
     ]
 });
 
-// Initialize music player
-const player = new Player(client, {
-    ytdlOptions: {
-        quality: 'highestaudio',
-        highWaterMark: 1 << 25
+// Initialize DisTube
+const distube = new DisTube(client, {
+    ffmpeg: {
+        path: ffmpeg
+    },
+    emitNewSongOnly: true,
+    emitAddSongWhenCreatingQueue: false,
+    plugins: [
+        new SpotifyPlugin({
+            api: {
+                clientId: config.spotifyClientId,
+                clientSecret: config.spotifyClientSecret
+            }
+        }),
+        new YtDlpPlugin({ update: true })
+    ]
+});
+
+// DisTube Events
+distube.on('playSong', (queue, song) => {
+    logger.info(`Now playing: ${song.name} in ${queue.textChannel?.guild.name}`);
+    queue.textChannel?.send(`🎵 **Now Playing:** ${song.name} - \`${song.formattedDuration}\``);
+});
+
+distube.on('addSong', (queue, song) => {
+    logger.info(`Track added to queue: ${song.name}`);
+    queue.textChannel?.send(`✅ **Added to queue:** ${song.name} - \`${song.formattedDuration}\``);
+});
+
+distube.on('addList', (queue, playlist) => {
+    logger.info(`Playlist added: ${playlist.name} (${playlist.songs.length} songs)`);
+    queue.textChannel?.send(`✅ **Added playlist:** ${playlist.name} (${playlist.songs.length} songs) - \`${playlist.formattedDuration}\``);
+});
+
+distube.on('error', (error, queue, song) => {
+    logger.error('DisTube error:', error);
+    if (queue && queue.textChannel) {
+        queue.textChannel.send(`❌ Error music player: ${error.toString().slice(0, 100)}...`);
+    } else {
+        logger.error('No queue/textChannel for error notification');
     }
 });
 
-// Load default extractors for music sources
-await player.extractors.loadDefault((ext) => ext !== 'YouTubeExtractor');
+distube.on('finish', (queue) => {
+    logger.info('Queue finished');
+});
 
-client.player = player;
+client.distube = distube;
 
 // Collections for cooldowns and temporary data
 client.cooldowns = new Collection();

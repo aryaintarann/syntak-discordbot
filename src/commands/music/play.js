@@ -1,14 +1,14 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { useMainPlayer, useQueue } from 'discord-player';
 import config from '../../config/config.js';
+import logger from '../../utils/logger.js';
 
 export default {
     data: new SlashCommandBuilder()
         .setName('play')
-        .setDescription('Play a song from YouTube, Spotify, or SoundCloud')
+        .setDescription('Play a song or playlist from YouTube or Spotify')
         .addStringOption(option =>
             option.setName('query')
-                .setDescription('Song name or URL')
+                .setDescription('Song name, YouTube URL, or Spotify URL')
                 .setRequired(true))
         .setDMPermission(false),
 
@@ -16,7 +16,7 @@ export default {
         const query = interaction.options.getString('query');
         const member = interaction.member;
 
-        // Check if user is in a voice channel
+        // 1. Check Voice Channel
         if (!member.voice.channel) {
             return interaction.reply({
                 content: '❌ Kamu harus berada di voice channel terlebih dahulu!',
@@ -24,7 +24,7 @@ export default {
             });
         }
 
-        // Check bot permissions
+        // 2. Check Permissions
         const permissions = member.voice.channel.permissionsFor(interaction.client.user);
         if (!permissions.has('Connect') || !permissions.has('Speak')) {
             return interaction.reply({
@@ -33,66 +33,41 @@ export default {
             });
         }
 
+        // 3. Defer Reply (Crucial for longer operations like playlist loading)
         await interaction.deferReply();
 
         try {
-            const player = useMainPlayer();
+            const distube = interaction.client.distube;
 
-            const searchResult = await player.search(query, {
-                requestedBy: interaction.user,
-                searchEngine: query.includes('spotify') ? 'spotify' :
-                    query.includes('soundcloud') ? 'soundcloud' :
-                        'youtube'
+            // 4. Execute Play
+            await distube.play(member.voice.channel, query, {
+                member: member,
+                textChannel: interaction.channel,
+                metadata: {
+                    interaction: interaction
+                }
             });
 
-            if (!searchResult || !searchResult.tracks.length) {
-                return interaction.editReply('❌ Lagu tidak ditemukan!');
-            }
+            // 5. Initial Feedback
+            await interaction.editReply({
+                embeds: [new EmbedBuilder()
+                    .setColor(config.colors.primary)
+                    .setDescription(`🔍 **Processing:** \`${query}\``)
+                ]
+            });
 
-            const queue = useQueue(interaction.guild.id);
-
-            try {
-                const { track } = await player.play(member.voice.channel, searchResult, {
-                    nodeOptions: {
-                        metadata: {
-                            channel: interaction.channel,
-                            client: interaction.guild.members.me,
-                            requestedBy: interaction.user
-                        },
-                        leaveOnEmpty: true,
-                        leaveOnEmptyCooldown: 300000, // 5 minutes
-                        leaveOnEnd: true,
-                        leaveOnEndCooldown: 300000,
-                        bufferingTimeout: 3000,
-                        volume: 50
-                    }
-                });
-
-                const embed = new EmbedBuilder()
-                    .setColor(config.colors.success)
-                    .setTitle('🎵 Now Playing')
-                    .setDescription(`**[${track.title}](${track.url})**`)
-                    .setThumbnail(track.thumbnail)
-                    .addFields(
-                        { name: 'Duration', value: track.duration, inline: true },
-                        { name: 'Requested By', value: interaction.user.toString(), inline: true },
-                        { name: 'Author', value: track.author, inline: true }
-                    );
-
-                if (queue && queue.tracks.data.length > 0) {
-                    embed.addFields({ name: 'Position in Queue', value: `${queue.tracks.data.length}` });
-                }
-
-                return interaction.editReply({ embeds: [embed] });
-            } catch (error) {
-                logger.error('Error playing track:', error);
-                return interaction.editReply('❌ Error saat memutar lagu!');
-            }
         } catch (error) {
-            logger.error('Error searching for track:', error);
-            return interaction.editReply('❌ Error saat mencari lagu!');
+            logger.error('Error in play command:', error);
+
+            const errorMessage = `❌ Error: ${error.message}`;
+
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: errorMessage, embeds: [] });
+            } else {
+                await interaction.reply({ content: errorMessage, ephemeral: true });
+            }
         }
     },
 
-    cooldown: 2
+    cooldown: 3
 };

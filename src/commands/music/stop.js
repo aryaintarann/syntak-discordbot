@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { useQueue } from 'discord-player';
+import logger from '../../utils/logger.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -8,7 +8,7 @@ export default {
         .setDMPermission(false),
 
     async execute(interaction) {
-        const queue = useQueue(interaction.guild.id);
+        const queue = interaction.client.distube.getQueue(interaction.guild.id);
 
         if (!queue) {
             return interaction.reply({
@@ -17,17 +17,16 @@ export default {
             });
         }
 
-        const member = interaction.member;
-        if (!member.voice.channel || member.voice.channel.id !== interaction.guild.members.me.voice.channel?.id) {
+        try {
+            await interaction.client.distube.stop(interaction.guild.id);
+            return interaction.reply('⏹️ Stopped the music and cleared the queue!');
+        } catch (error) {
+            logger.error('Error in stop command:', error);
             return interaction.reply({
-                content: '❌ Kamu harus berada di voice channel yang sama dengan bot!',
+                content: `❌ Error stopping music: ${error.message}`,
                 ephemeral: true
             });
         }
-
-        queue.delete();
-
-        return interaction.reply('⏹️ Music stopped and queue cleared!');
     },
 
     cooldown: 2

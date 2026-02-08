@@ -22,14 +22,18 @@
   "dependencies": {
     "@discordjs/builders": "^1.7.0",
     "@discordjs/rest": "^2.2.0",
-    "@discordjs/voice": "^0.16.1",
+    "@discordjs/voice": "^0.19.0",
+    "@distube/spotify": "^2.0.2",
+    "@distube/yt-dlp": "^2.0.1",
     "@napi-rs/canvas": "^0.1.52",
+    "@snazzah/davey": "^0.1.9",
     "axios": "^1.6.5",
-    "discord-player": "^6.6.6",
     "discord.js": "^14.14.1",
+    "distube": "^5.2.3",
     "dotenv": "^16.3.1",
-    "ffmpeg-static": "^5.2.0",
+    "ffmpeg-static": "^5.3.0",
     "sequelize": "^6.35.2",
+    "sodium-native": "^5.0.10",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
