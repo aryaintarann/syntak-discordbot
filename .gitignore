@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# Editor directories
+.vscode/
+.idea/
+.MULTI_SERVER_GUIDE.md
+.QUICKSTART.md
+
+# OS files
+.DS_Store
+Thumbs.db
