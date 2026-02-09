@@ -1,39 +1,20 @@
 import { Events } from 'discord.js';
-import { createMessageEditEmbed } from '../utils/embedBuilder.js';
-import pool from '../database/database.js';
+import LoggingManager from '../utils/loggingManager.js';
 
 export default {
     name: Events.MessageUpdate,
     async execute(oldMessage, newMessage) {
-        // Ignore bot messages
-        if (newMessage.author?.bot) return;
+        // Ignore bot messages and DMs
+        if (newMessage.author?.bot || !newMessage.guild) return;
 
-        // Ignore DMs
-        if (!newMessage.guild) return;
-
-        // Ignore if content hasn't changed (embed updates, etc)
+        // Ignore if content hasn't changed
         if (oldMessage.content === newMessage.content) return;
 
-        // Ignore if no old content (partial message)
+        // Ignore partial messages
         if (!oldMessage.content) return;
 
         try {
-            // Get mod log channel
-            const [rows] = await pool.query(
-                'SELECT mod_log_channel FROM guild_config WHERE guild_id = ?',
-                [newMessage.guild.id]
-            );
-
-            if (!rows || rows.length === 0 || !rows[0].mod_log_channel) return;
-
-            const logChannel = newMessage.guild.channels.cache.get(rows[0].mod_log_channel);
-            if (!logChannel) return;
-
-            // Create and send embed
-            const embed = createMessageEditEmbed(oldMessage, newMessage);
-
-            await logChannel.send({ embeds: [embed] });
-
+            await LoggingManager.logMessageEdit(oldMessage, newMessage);
         } catch (error) {
             console.error('Error in messageUpdate event:', error);
         }

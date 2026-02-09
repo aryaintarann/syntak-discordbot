@@ -103,6 +103,58 @@ export async function initializeDatabase() {
             )
         `);
 
+        // Create mod_cases table for comprehensive action logging
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS mod_cases (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20) NOT NULL,
+                case_number INT NOT NULL,
+                user_id VARCHAR(20) NOT NULL,
+                user_tag VARCHAR(100),
+                moderator_id VARCHAR(20) NOT NULL,
+                moderator_tag VARCHAR(100),
+                action_type VARCHAR(20) NOT NULL,
+                reason TEXT,
+                duration INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_guild_case (guild_id, case_number),
+                INDEX idx_guild_user (guild_id, user_id)
+            )
+        `);
+
+        // Create user_notes table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS user_notes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20) NOT NULL,
+                user_id VARCHAR(20) NOT NULL,
+                moderator_id VARCHAR(20) NOT NULL,
+                moderator_tag VARCHAR(100),
+                note TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_guild_user (guild_id, user_id)
+            )
+        `);
+
+        // Create message_logs table for edit/delete tracking
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS message_logs (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20) NOT NULL,
+                channel_id VARCHAR(20) NOT NULL,
+                message_id VARCHAR(20) NOT NULL,
+                user_id VARCHAR(20) NOT NULL,
+                user_tag VARCHAR(100),
+                content TEXT,
+                attachments JSON,
+                action_type VARCHAR(10) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_guild_channel (guild_id, channel_id),
+                INDEX idx_message (message_id),
+                INDEX idx_created (created_at)
+            )
+        `);
+
         connection.release();
         console.log('✅ Database tables initialized successfully');
     } catch (error) {

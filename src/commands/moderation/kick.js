@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
-import { hasPermission, canModerate } from '../../utils/permissions.js';
-import { logModAction } from '../../database/models/ModLog.js';
-import { createModActionEmbed, createErrorEmbed, createSuccessEmbed } from '../../utils/embedBuilder.js';
-import pool from '../../database/database.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { canModerate } from '../../utils/permissions.js';
+import { colors } from '../../utils/embedBuilder.js';
+import FeatureManager from '../../utils/featureManager.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -30,21 +29,21 @@ export default {
             // Validations
             if (!target) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'User tidak ditemukan di server ini.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('User tidak ditemukan di server ini.')],
                     ephemeral: true
                 });
             }
 
             if (target.id === interaction.user.id) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa kick diri sendiri.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Anda tidak bisa kick diri sendiri.')],
                     ephemeral: true
                 });
             }
 
             if (target.id === interaction.client.user.id) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa kick diri saya sendiri.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Saya tidak bisa kick diri saya sendiri.')],
                     ephemeral: true
                 });
             }
@@ -52,7 +51,7 @@ export default {
             // Check role hierarchy
             if (!canModerate(interaction.member, target)) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa kick member dengan role yang lebih tinggi atau sama dengan Anda.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Anda tidak bisa kick member dengan role yang lebih tinggi atau sama dengan Anda.')],
                     ephemeral: true
                 });
             }
@@ -60,82 +59,63 @@ export default {
             // Check if bot can kick
             if (!target.kickable) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa kick member ini. Role mereka mungkin lebih tinggi dari role saya.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Saya tidak bisa kick member ini. Role mereka mungkin lebih tinggi dari role saya.')],
                     ephemeral: true
                 });
             }
 
             // Send DM to target before kicking
             try {
-                await target.send(`Anda telah di-kick dari **${interaction.guild.name}**\n**Alasan:** ${reason}\n**Moderator:** ${interaction.user.tag}`);
+                await target.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(colors.error)
+                        .setTitle(`👢 You have been Kicked from ${interaction.guild.name}`)
+                        .addFields(
+                            { name: 'Reason', value: reason },
+                            { name: 'Moderator', value: interaction.user.tag }
+                        )
+                    ]
+                });
             } catch (error) {
-                // User has DMs disabled
-                console.log('Could not send DM to kicked user');
+                // Ignore DM errors
             }
 
             // Kick the member
             await target.kick(reason);
 
-            // Log to database
-            await logModAction(
-                'kick',
-                target.id,
-                target.user.tag,
-                interaction.user.id,
-                interaction.user.tag,
-                interaction.guild.id,
+            // Log action using FeatureManager
+            const caseNumber = await FeatureManager.logModAction({
+                guildId: interaction.guildId,
+                moderatorId: interaction.user.id,
+                moderatorTag: interaction.user.tag,
+                userId: target.id,
+                userTag: target.user.tag,
+                actionType: 'kick',
                 reason
-            );
-
-            // Send confirmation to moderator
-            await interaction.reply({
-                embeds: [createSuccessEmbed(
-                    'Member Kicked',
-                    `${target.user.tag} telah di-kick dari server.\n**Alasan:** ${reason}`
-                )]
             });
 
-            // Log to mod channel
-            await logToModChannel(interaction, target, reason);
+            // Send confirmation
+            await interaction.reply({
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.success)
+                    .setTitle('👢 User Kicked')
+                    .setDescription(`${target.user.tag} telah di-kick dari server.`)
+                    .addFields(
+                        { name: 'Target', value: target.user.tag, inline: true },
+                        { name: 'Case', value: `#${caseNumber}`, inline: true },
+                        { name: 'Reason', value: reason, inline: false }
+                    )]
+            });
 
         } catch (error) {
             console.error('Error in kick command:', error);
-
-            const errorEmbed = createErrorEmbed(
-                'Error',
-                'Terjadi kesalahan saat melakukan kick. Pastikan bot memiliki permission yang cukup.'
-            );
-
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-            } else {
-                await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-            }
+            await interaction.reply({
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.error)
+                    .setTitle('❌ Error')
+                    .setDescription('Terjadi kesalahan saat melakukan kick.')],
+                ephemeral: true
+            });
         }
     }
 };
-
-async function logToModChannel(interaction, target, reason) {
-    try {
-        const [rows] = await pool.query(
-            'SELECT mod_log_channel FROM guild_config WHERE guild_id = ?',
-            [interaction.guild.id]
-        );
-
-        if (!rows || rows.length === 0 || !rows[0].mod_log_channel) return;
-
-        const channel = interaction.guild.channels.cache.get(rows[0].mod_log_channel);
-        if (!channel) return;
-
-        const embed = createModActionEmbed(
-            'kick',
-            target.user,
-            interaction.user,
-            reason
-        );
-
-        await channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('Error logging to mod channel:', error);
-    }
-}

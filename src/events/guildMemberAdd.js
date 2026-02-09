@@ -4,13 +4,17 @@ import { enableLockdown } from '../antiraid/lockdown.js';
 import { getGuildConfig } from '../database/models/GuildConfig.js';
 import { createRaidAlertEmbed } from '../utils/embedBuilder.js';
 import { antiRaidConfig } from '../config/antiraid.js';
+import LoggingManager from '../utils/loggingManager.js';
 import pool from '../database/database.js';
 
 export default {
     name: Events.GuildMemberAdd,
     async execute(member) {
         try {
-            // Track the join
+            // Log member join
+            await LoggingManager.logMemberJoin(member);
+
+            // Track the join for anti-raid
             await trackMemberJoin(member.guild.id, member.id);
 
             // Get guild config
@@ -30,28 +34,14 @@ export default {
                     reason: `Auto-lockdown: Raid detected (${raidStatus.joinCount} joins in ${raidStatus.timeWindow / 1000}s)`
                 });
 
-                // Notify to mod log channel
-                const [rows] = await pool.query(
-                    'SELECT mod_log_channel FROM guild_config WHERE guild_id = ?',
-                    [member.guild.id]
+                // Notify to mod log channel using LoggingManager
+                const embed = createRaidAlertEmbed(
+                    raidStatus.joinCount,
+                    raidStatus.timeWindow,
+                    raidStatus.severity
                 );
 
-                if (rows && rows.length > 0 && rows[0].mod_log_channel) {
-                    const logChannel = member.guild.channels.cache.get(rows[0].mod_log_channel);
-
-                    if (logChannel) {
-                        const embed = createRaidAlertEmbed(
-                            raidStatus.joinCount,
-                            raidStatus.timeWindow,
-                            raidStatus.severity
-                        );
-
-                        await logChannel.send({
-                            content: `@here **RAID ALERT**`,
-                            embeds: [embed]
-                        });
-                    }
-                }
+                await LoggingManager.sendLog(member.guild, 'modLog', embed);
             }
 
         } catch (error) {

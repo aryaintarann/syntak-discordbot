@@ -15,11 +15,14 @@ export default function Sidebar({ serverId, serverName, serverIcon }: SidebarPro
     const [isOpen, setIsOpen] = useState(false)
 
     const menuItems = [
-        { name: 'Configuration', icon: '⚙️', href: `/server/${serverId}` },
+        { name: 'Overview', icon: '🏠', href: `/server/${serverId}` },
+        { name: 'Features', icon: '🎛️', href: `/server/${serverId}/features` },
         { name: 'Auto-Moderation', icon: '🤖', href: `/server/${serverId}/automod` },
-        { name: 'Statistics', icon: '📊', href: `/server/${serverId}/stats`, disabled: true },
-        { name: 'Mod Logs', icon: '📝', href: `/server/${serverId}/logs`, disabled: true },
+        { name: 'Logging', icon: '📋', href: `/server/${serverId}/logging` },
+        { name: 'Security', icon: '🔒', href: `/server/${serverId}/security`, disabled: true },
+        { name: 'Mod Logs', icon: '📝', href: `/server/${serverId}/modlog`, disabled: true },
         { name: 'Users', icon: '👥', href: `/server/${serverId}/users`, disabled: true },
+        { name: 'Statistics', icon: '📊', href: `/server/${serverId}/stats`, disabled: true },
     ]
 
     return (

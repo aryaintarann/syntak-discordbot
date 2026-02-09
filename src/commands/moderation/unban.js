@@ -1,16 +1,15 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
-import { logModAction } from '../../database/models/ModLog.js';
-import { createModActionEmbed, createErrorEmbed, createSuccessEmbed } from '../../utils/embedBuilder.js';
-import pool from '../../database/database.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { colors } from '../../utils/embedBuilder.js';
+import FeatureManager from '../../utils/featureManager.js';
 
 export default {
     data: new SlashCommandBuilder()
         .setName('unban')
-        .setDescription('Unban a user from the server')
+        .setDescription('Unban a member from the server')
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
         .addStringOption(option =>
             option
-                .setName('user_id')
+                .setName('userid')
                 .setDescription('The ID of the user to unban')
                 .setRequired(true)
         )
@@ -23,94 +22,55 @@ export default {
 
     async execute(interaction) {
         try {
-            const userId = interaction.options.getString('user_id');
+            const userId = interaction.options.getString('userid');
             const reason = interaction.options.getString('reason') || 'No reason provided';
 
-            // Validate user ID format (Discord IDs are 17-19 digits)
-            if (!/^\d{17,19}$/.test(userId)) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'User ID tidak valid. Pastikan format ID benar (17-19 digit angka).')],
-                    ephemeral: true
-                });
-            }
-
-            // Check if user is actually banned
-            let bannedUser;
+            // Unban the user
             try {
-                bannedUser = await interaction.guild.bans.fetch(userId);
+                await interaction.guild.members.unban(userId, reason);
             } catch (error) {
                 return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'User dengan ID tersebut tidak ditemukan di ban list.')],
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('User tidak ditemukan atau tidak sedang di-ban.')],
                     ephemeral: true
                 });
             }
 
-            // Unban the user
-            await interaction.guild.members.unban(userId, reason);
-
             // Get user info for logging
-            const user = bannedUser.user;
+            const user = await interaction.client.users.fetch(userId).catch(() => ({ id: userId, tag: 'Unknown User' }));
 
-            // Log to database
-            await logModAction(
-                'unban',
-                user.id,
-                user.tag,
-                interaction.user.id,
-                interaction.user.tag,
-                interaction.guild.id,
+            // Log action using FeatureManager
+            const caseNumber = await FeatureManager.logModAction({
+                guildId: interaction.guildId,
+                moderatorId: interaction.user.id,
+                moderatorTag: interaction.user.tag,
+                userId: userId,
+                userTag: user.tag,
+                actionType: 'unban',
                 reason
-            );
+            });
 
             // Send confirmation
             await interaction.reply({
-                embeds: [createSuccessEmbed(
-                    'User Unbanned',
-                    `${user.tag} (${user.id}) telah di-unban dari server.\n**Alasan:** ${reason}`
-                )]
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.success)
+                    .setTitle('✅ User Unbanned')
+                    .setDescription(`User dengan ID ${userId} telah di-unban.`)
+                    .addFields(
+                        { name: 'Target', value: `<@${userId}>`, inline: true },
+                        { name: 'Case', value: `#${caseNumber}`, inline: true },
+                        { name: 'Reason', value: reason, inline: false }
+                    )]
             });
-
-            // Log to mod channel
-            await logToModChannel(interaction, user, reason);
 
         } catch (error) {
             console.error('Error in unban command:', error);
-
-            const errorEmbed = createErrorEmbed(
-                'Error',
-                'Terjadi kesalahan saat melakukan unban. Pastikan bot memiliki permission yang cukup dan user ID benar.'
-            );
-
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-            } else {
-                await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-            }
+            await interaction.reply({
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.error)
+                    .setTitle('❌ Error')
+                    .setDescription('Terjadi kesalahan saat melakukan unban.')],
+                ephemeral: true
+            });
         }
     }
 };
-
-async function logToModChannel(interaction, user, reason) {
-    try {
-        const [rows] = await pool.query(
-            'SELECT mod_log_channel FROM guild_config WHERE guild_id = ?',
-            [interaction.guild.id]
-        );
-
-        if (!rows || rows.length === 0 || !rows[0].mod_log_channel) return;
-
-        const channel = interaction.guild.channels.cache.get(rows[0].mod_log_channel);
-        if (!channel) return;
-
-        const embed = createModActionEmbed(
-            'unban',
-            user,
-            interaction.user,
-            reason
-        );
-
-        await channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('Error logging to mod channel:', error);
-    }
-}

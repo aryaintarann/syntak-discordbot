@@ -1,10 +1,9 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { canModerate } from '../../utils/permissions.js';
-import { logModAction } from '../../database/models/ModLog.js';
-import { createModActionEmbed, createErrorEmbed, createSuccessEmbed } from '../../utils/embedBuilder.js';
+import { colors } from '../../utils/embedBuilder.js';
 import { parseTime, formatTime, validateTimeoutDuration } from '../../utils/timeParser.js';
 import { trackTimeout } from '../../utils/timeoutTracker.js';
-import pool from '../../database/database.js';
+import FeatureManager from '../../utils/featureManager.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -32,7 +31,6 @@ export default {
 
     async execute(interaction) {
         try {
-            // Defer reply immediately to prevent timeout
             await interaction.deferReply();
 
             const target = interaction.options.getMember('target');
@@ -42,26 +40,26 @@ export default {
             // Validations
             if (!target) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', 'User tidak ditemukan di server ini.')]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('User tidak ditemukan di server ini.')]
                 });
             }
 
             if (target.id === interaction.user.id) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout diri sendiri.')]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Anda tidak bisa timeout diri sendiri.')]
                 });
             }
 
             if (target.id === interaction.client.user.id) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout diri saya sendiri.')]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Saya tidak bisa timeout diri saya sendiri.')]
                 });
             }
 
             // Check role hierarchy
             if (!canModerate(interaction.member, target)) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout member dengan role yang lebih tinggi.')]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Anda tidak bisa timeout member dengan role yang lebih tinggi.')]
                 });
             }
 
@@ -72,22 +70,32 @@ export default {
                 validateTimeoutDuration(duration);
             } catch (error) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', error.message)]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription(error.message)]
                 });
             }
 
             // Check if bot can moderate
             if (!target.moderatable) {
                 return interaction.editReply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout member ini. Role mereka mungkin lebih tinggi dari role saya.')]
+                    embeds: [new EmbedBuilder().setColor(colors.error).setTitle('❌ Error').setDescription('Saya tidak bisa timeout member ini. Role mereka mungkin lebih tinggi dari role saya.')]
                 });
             }
 
             // Send DM to target
             try {
-                await target.send(`Anda telah di-timeout di **${interaction.guild.name}**\n**Durasi:** ${formatTime(duration)}\n**Alasan:** ${reason}\n**Moderator:** ${interaction.user.tag}`);
+                await target.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(colors.warn)
+                        .setTitle(`⏰ You have been Timed Out in ${interaction.guild.name}`)
+                        .addFields(
+                            { name: 'Duration', value: formatTime(duration), inline: true },
+                            { name: 'Reason', value: reason, inline: true },
+                            { name: 'Moderator', value: interaction.user.tag, inline: false }
+                        )
+                    ]
+                });
             } catch (error) {
-                console.log('Could not send DM');
+                // Ignore DM errors
             }
 
             // Timeout the member
@@ -97,68 +105,40 @@ export default {
             const expiryTime = Date.now() + duration;
             await trackTimeout(target.id, interaction.guild.id, expiryTime);
 
-            // Log to database
-            await logModAction(
-                'timeout',
-                target.id,
-                target.user.tag,
-                interaction.user.id,
-                interaction.user.tag,
-                interaction.guild.id,
+            // Log action using FeatureManager
+            const caseNumber = await FeatureManager.logModAction({
+                guildId: interaction.guildId,
+                moderatorId: interaction.user.id,
+                moderatorTag: interaction.user.tag,
+                userId: target.id,
+                userTag: target.user.tag,
+                actionType: 'timeout',
                 reason,
-                { duration, formattedDuration: formatTime(duration) }
-            );
+                duration: Math.floor(duration / 1000)
+            });
 
             // Send confirmation
             await interaction.editReply({
-                embeds: [createSuccessEmbed(
-                    'Member Timed Out',
-                    `${target.user.tag} telah di-timeout selama ${formatTime(duration)}.\n**Alasan:** ${reason}`
-                )]
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.warn)
+                    .setTitle('⏰ Member Timed Out')
+                    .setDescription(`${target.user.tag} telah di-timeout.`)
+                    .addFields(
+                        { name: 'Target', value: target.user.tag, inline: true },
+                        { name: 'Duration', value: formatTime(duration), inline: true },
+                        { name: 'Case', value: `#${caseNumber}`, inline: true },
+                        { name: 'Reason', value: reason, inline: false }
+                    )]
             });
-
-            // Log to mod channel
-            await logToModChannel(interaction, target, reason, duration);
 
         } catch (error) {
             console.error('Error in timeout command:', error);
-
-            const errorEmbed = createErrorEmbed(
-                'Error',
-                'Terjadi kesalahan saat melakukan timeout.'
-            );
-
-            if (interaction.replied || interaction.deferred) {
-                await interaction.editReply({ embeds: [errorEmbed] });
-            } else {
-                await interaction.editReply({ embeds: [errorEmbed] });
-            }
+            await interaction.editReply({
+                embeds: [new EmbedBuilder()
+                    .setColor(colors.error)
+                    .setTitle('❌ Error')
+                    .setDescription('Terjadi kesalahan saat melakukan timeout.')]
+            });
         }
     }
 };
-
-async function logToModChannel(interaction, target, reason, duration) {
-    try {
-        const [rows] = await pool.query(
-            'SELECT mod_log_channel FROM guild_config WHERE guild_id = ?',
-            [interaction.guild.id]
-        );
-
-        if (!rows || rows.length === 0 || !rows[0].mod_log_channel) return;
-
-        const channel = interaction.guild.channels.cache.get(rows[0].mod_log_channel);
-        if (!channel) return;
-
-        const embed = createModActionEmbed(
-            'timeout',
-            target.user,
-            interaction.user,
-            reason,
-            [{ name: '⏱️ Duration', value: formatTime(duration), inline: true }]
-        );
-
-        await channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('Error logging to mod channel:', error);
-    }
-}
