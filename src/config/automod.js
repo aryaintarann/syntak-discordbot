@@ -22,7 +22,9 @@ export const patterns = {
     mentionPattern: /<@!?(\d+)>/g,
 
     // IP addresses (untuk block potential DDoS/spam)
-    ipPattern: /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g
+    ipPattern: /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g,
+
+    // Custom Regex Helper (placeholder, logic handles dynamic regex)
 };
 
 // Auto-moderation configuration
@@ -71,6 +73,30 @@ export const autoModConfig = {
         timeWindow: 5000, // dalam 5 detik
         action: 'timeout',
         timeoutDuration: 300000, // 5 menit
+    },
+
+    // Duplicate message detection
+    duplicate: {
+        enabled: true,
+        timeWindow: 10000, // 10 seconds
+        action: 'delete',
+        sendWarning: true
+    },
+
+    // Emoji spam filter
+    emojiSpam: {
+        enabled: true,
+        maxEmojis: 10,
+        action: 'delete',
+        sendWarning: true
+    },
+
+    // Newline spam filter
+    newlineSpam: {
+        enabled: true,
+        maxNewlines: 10,
+        action: 'delete',
+        sendWarning: true
     }
 };
 
@@ -81,7 +107,11 @@ export const violationTypes = {
     MASS_MENTION: 'mass_mention',
     INVITE_LINK: 'invite_link',
     SPAM: 'spam',
-    CAPS_SPAM: 'caps_spam'
+    CAPS_SPAM: 'caps_spam',
+    DUPLICATE: 'duplicate',
+    EMOJI_SPAM: 'emoji_spam',
+    NEWLINE_SPAM: 'newline_spam',
+    REGEX_FILTER: 'regex_filter'
 };
 
 // Warning messages untuk user
@@ -91,4 +121,9 @@ export const warningMessages = {
     [violationTypes.MASS_MENTION]: '⚠️ Pesan Anda dihapus karena mention spam.',
     [violationTypes.INVITE_LINK]: '⚠️ Pesan Anda dihapus karena mengandung invite link dari server lain.',
     [violationTypes.SPAM]: '⚠️ Anda mengirim pesan terlalu cepat. Mohon perlambat.',
+    [violationTypes.CAPS_SPAM]: '⚠️ Jangan menggunakan huruf kapital berlebihan (CAPS LOCK).',
+    [violationTypes.DUPLICATE]: '⚠️ Jangan mengirim pesan yang sama berulang kali.',
+    [violationTypes.EMOJI_SPAM]: '⚠️ Terlalu banyak emoji dalam satu pesan.',
+    [violationTypes.NEWLINE_SPAM]: '⚠️ Pesan Anda terlalu panjang secara vertikal (spam baris baru).',
+    [violationTypes.REGEX_FILTER]: '⚠️ Pesan Anda melanggar filter konten server.',
 };

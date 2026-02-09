@@ -5,6 +5,7 @@ import { logModAction } from '../database/models/ModLog.js';
 import { addWarning, getWarningCount } from '../database/models/Warning.js';
 import { parseTime } from '../utils/timeParser.js';
 import pool from '../database/database.js';
+import FeatureManager from '../utils/featureManager.js';
 
 /**
  * Enforce auto-moderation violations
@@ -124,6 +125,9 @@ async function logToModChannel(message, violation) {
 /**
  * Handle auto-warn
  */
+/**
+ * Handle auto-warn
+ */
 async function handleAutoWarn(message, violation) {
     try {
         // Add warning to database
@@ -136,33 +140,60 @@ async function handleAutoWarn(message, violation) {
 
         const warningCount = await getWarningCount(message.author.id, message.guild.id);
 
-        // Check if user reached warning threshold
-        const [configRows] = await pool.query(
-            'SELECT max_warnings, auto_action FROM guild_config WHERE guild_id = ?',
-            [message.guild.id]
-        );
+        // Check if escalating punishment is enabled via FeatureManager
+        const config = await FeatureManager.getFeatureConfig(message.guild.id, 'automod', 'escalatingPunishment');
 
-        if (configRows && configRows.length > 0) {
-            const { max_warnings, auto_action } = configRows[0];
+        if (config && config.enabled) {
+            const threshold = config.thresholds?.warnToTimeout || 3;
+            const timeoutDuration = config.timeoutDuration || 600; // default 10 mins
 
-            if (warningCount >= max_warnings) {
-                // Execute auto action
-                if (auto_action === 'timeout') {
-                    await message.member.timeout(600000, `Reached ${max_warnings} warnings`); // 10 min timeout
-                } else if (auto_action === 'kick') {
-                    await message.member.kick(`Reached ${max_warnings} warnings`);
-                }
+            if (warningCount >= threshold) {
+                // Execute auto action (Timeout by default for now)
+                await message.member.timeout(timeoutDuration * 1000, `Reached ${threshold} warnings`);
 
                 // Log action
                 await logModAction(
-                    auto_action,
+                    'timeout',
                     message.author.id,
                     message.author.tag,
                     message.client.user.id,
                     message.client.user.tag,
                     message.guild.id,
-                    `Auto-action: Reached ${max_warnings} warnings`
+                    `Auto-action: Reached ${threshold} warnings`,
+                    { duration: timeoutDuration * 1000 }
                 );
+            }
+        }
+
+        // Fallback to old config if new one is disabled/missing (for backward compatibility)
+        else {
+            const [configRows] = await pool.query(
+                'SELECT max_warnings, auto_action FROM guild_config WHERE guild_id = ?',
+                [message.guild.id]
+            );
+
+            if (configRows && configRows.length > 0) {
+                const { max_warnings, auto_action } = configRows[0];
+
+                if (max_warnings > 0 && warningCount >= max_warnings) {
+                    // Execute auto action
+                    if (auto_action === 'timeout') {
+                        await message.member.timeout(600000, `Reached ${max_warnings} warnings`); // 10 min timeout
+                    } else if (auto_action === 'kick') {
+                        await message.member.kick(`Reached ${max_warnings} warnings`);
+                    }
+
+                    // Log action
+                    await logModAction(
+                        auto_action,
+                        message.author.id,
+                        message.author.tag,
+                        message.client.user.id,
+                        message.client.user.tag,
+                        message.guild.id,
+                        `Auto-action: Reached ${max_warnings} warnings`
+                    );
+                }
             }
         }
     } catch (error) {
@@ -241,4 +272,44 @@ setInterval(() => {
             userMessageTimestamps.set(userId, recentTimestamps);
         }
     }
+
+    // Clean up message history
+    for (const [userId, messages] of userMessageHistory.entries()) {
+        const recentMessages = messages.filter(msg => now - msg.timestamp < 60000); // Keep last minute
+        if (recentMessages.length === 0) {
+            userMessageHistory.delete(userId);
+        } else {
+            userMessageHistory.set(userId, recentMessages);
+        }
+    }
 }, 600000);
+
+/**
+ * Message history for duplicate detection
+ */
+const userMessageHistory = new Map();
+
+export function getUserHistory(userId) {
+    return userMessageHistory.get(userId) || [];
+}
+
+export function trackMessage(message) {
+    const userId = message.author.id;
+    const now = Date.now();
+
+    if (!userMessageHistory.has(userId)) {
+        userMessageHistory.set(userId, []);
+    }
+
+    const history = userMessageHistory.get(userId);
+
+    // Keep last 10 messages or within last 1 minute
+    history.push({ content: message.content, timestamp: now });
+
+    // Prune
+    if (history.length > 10) history.shift();
+
+    // Also prune old messages
+    const recentHistory = history.filter(msg => now - msg.timestamp < 60000);
+    userMessageHistory.set(userId, recentHistory);
+}

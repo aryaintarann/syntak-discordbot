@@ -53,6 +53,26 @@ export async function GET(
                 massMention: { enabled: true, exemptChannels: [] },
                 inviteLinks: { enabled: true, exemptChannels: [] },
                 caps: { enabled: false, exemptChannels: [] }
+
+            },
+            duplicateDetection: {
+                enabled: false,
+                threshold: 3,
+                timeWindow: 60
+            },
+            emojiSpam: {
+                enabled: false,
+                maxEmojis: 10
+            },
+            newlineSpam: {
+                enabled: false,
+                maxNewlines: 10
+            },
+            regexFilters: [],
+            escalatingPunishment: {
+                enabled: false,
+                thresholds: { warnToTimeout: 3 },
+                timeoutDuration: 600
             }
         }
 
@@ -65,6 +85,11 @@ export async function GET(
                 if (parsed.automod) {
                     if (parsed.automod.badWords) automodConfig.badWords = parsed.automod.badWords
                     if (parsed.automod.spam) automodConfig.spam = parsed.automod.spam
+                    if (parsed.automod.duplicateDetection) automodConfig.duplicateDetection = parsed.automod.duplicateDetection
+                    if (parsed.automod.emojiSpam) automodConfig.emojiSpam = parsed.automod.emojiSpam
+                    if (parsed.automod.newlineSpam) automodConfig.newlineSpam = parsed.automod.newlineSpam
+                    if (parsed.automod.regexFilters) automodConfig.regexFilters = parsed.automod.regexFilters
+                    if (parsed.automod.escalatingPunishment) automodConfig.escalatingPunishment = parsed.automod.escalatingPunishment
 
                     // Handle filters - check if new structure or old
                     if (parsed.automod.filters) {
@@ -110,7 +135,7 @@ export async function PUT(
         const { id } = await params
         const body = await request.json()
 
-        const { enabled, badWords, spam, filters } = body
+        const { enabled, badWords, spam, filters, duplicateDetection, emojiSpam, newlineSpam, regexFilters } = body
 
         // Validate inputs
         if (badWords && !Array.isArray(badWords)) {
@@ -151,7 +176,12 @@ export async function PUT(
                 massMention: { enabled: true, exemptChannels: [] },
                 inviteLinks: { enabled: true, exemptChannels: [] },
                 caps: { enabled: false, exemptChannels: [] }
-            }
+            },
+            duplicateDetection: duplicateDetection || { enabled: false, threshold: 3, timeWindow: 60 },
+            emojiSpam: emojiSpam || { enabled: false, maxEmojis: 10 },
+            newlineSpam: newlineSpam || { enabled: false, maxNewlines: 10 },
+            regexFilters: regexFilters || [],
+            escalatingPunishment: body.escalatingPunishment || { enabled: false, thresholds: { warnToTimeout: 3 }, timeoutDuration: 600 }
         }
 
         // Save to database - also update auto_mod_enabled

@@ -43,6 +43,25 @@ interface AutomodConfig {
             exemptChannels: string[]
         }
     }
+    duplicateDetection?: {
+        enabled: boolean
+        threshold: number
+        timeWindow: number
+    }
+    emojiSpam?: {
+        enabled: boolean
+        maxEmojis: number
+    }
+    newlineSpam?: {
+        enabled: boolean
+        maxNewlines: number
+    }
+    regexFilters?: { pattern: string, name?: string, action?: string }[]
+    escalatingPunishment?: {
+        enabled: boolean
+        thresholds: { warnToTimeout: number }
+        timeoutDuration: number
+    }
 }
 
 export default function AutomodPage() {
@@ -71,6 +90,24 @@ export default function AutomodPage() {
     const [inviteLinksExemptChannels, setInviteLinksExemptChannels] = useState<string[]>([])
     const [capsEnabled, setCapsEnabled] = useState(false)
     const [capsExemptChannels, setCapsExemptChannels] = useState<string[]>([])
+
+    // Phase 4 States
+    const [duplicateEnabled, setDuplicateEnabled] = useState(false)
+    const [duplicateThreshold, setDuplicateThreshold] = useState(3)
+    const [duplicateTimeWindow, setDuplicateTimeWindow] = useState(60)
+
+    const [emojiSpamEnabled, setEmojiSpamEnabled] = useState(false)
+    const [maxEmojis, setMaxEmojis] = useState(10)
+
+    const [newlineSpamEnabled, setNewlineSpamEnabled] = useState(false)
+    const [maxNewlines, setMaxNewlines] = useState(10)
+
+    const [regexFilters, setRegexFilters] = useState<{ pattern: string, name?: string, action?: string }[]>([])
+
+    // Escalating Punishment
+    const [escalatingEnabled, setEscalatingEnabled] = useState(false)
+    const [warnToTimeoutThreshold, setWarnToTimeoutThreshold] = useState(3)
+    const [escalatingTimeoutDuration, setEscalatingTimeoutDuration] = useState(600)
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -128,11 +165,28 @@ export default function AutomodPage() {
                 setLinkSpamExemptChannels(data.filters?.linkSpam?.exemptChannels || [])
                 setMassMentionEnabled(data.filters?.massMention?.enabled ?? true)
                 setMassMentionExemptChannels(data.filters?.massMention?.exemptChannels || [])
-                setInviteLinksEnabled(data.filters?.inviteLinks?.enabled ?? true)
                 setInviteLinksExemptChannels(data.filters?.inviteLinks?.exemptChannels || [])
                 setCapsEnabled(data.filters?.caps?.enabled ?? false)
                 setCapsExemptChannels(data.filters?.caps?.exemptChannels || [])
+
+                // Load Phase 4 settings
+                setDuplicateEnabled(data.duplicateDetection?.enabled ?? false)
+                setDuplicateThreshold(data.duplicateDetection?.threshold || 3)
+                setDuplicateTimeWindow(data.duplicateDetection?.timeWindow || 60)
+
+                setEmojiSpamEnabled(data.emojiSpam?.enabled ?? false)
+                setMaxEmojis(data.emojiSpam?.maxEmojis || 10)
+
+                setNewlineSpamEnabled(data.newlineSpam?.enabled ?? false)
+                setMaxNewlines(data.newlineSpam?.maxNewlines || 10)
+
+                setRegexFilters(data.regexFilters || [])
+
+                setEscalatingEnabled(data.escalatingPunishment?.enabled ?? false)
+                setWarnToTimeoutThreshold(data.escalatingPunishment?.thresholds?.warnToTimeout || 3)
+                setEscalatingTimeoutDuration(data.escalatingPunishment?.timeoutDuration || 600)
             }
+
         } catch (error) {
             console.error('Error fetching config:', error)
         } finally {
@@ -184,6 +238,25 @@ export default function AutomodPage() {
                             enabled: capsEnabled,
                             exemptChannels: capsExemptChannels
                         }
+                    },
+                    duplicateDetection: {
+                        enabled: duplicateEnabled,
+                        threshold: duplicateThreshold,
+                        timeWindow: duplicateTimeWindow
+                    },
+                    emojiSpam: {
+                        enabled: emojiSpamEnabled,
+                        maxEmojis
+                    },
+                    newlineSpam: {
+                        enabled: newlineSpamEnabled,
+                        maxNewlines
+                    },
+                    regexFilters,
+                    escalatingPunishment: {
+                        enabled: escalatingEnabled,
+                        thresholds: { warnToTimeout: warnToTimeoutThreshold },
+                        timeoutDuration: escalatingTimeoutDuration
                     }
                 }),
             })
@@ -252,6 +325,62 @@ export default function AutomodPage() {
                                     <p className="text-yellow-200 text-sm">⚠️ Auto-moderation is currently disabled. No automatic actions will be taken.</p>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Escalating Punishment (Phased 4) */}
+                        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6">
+                            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                                📈 Escalating Punishment
+                            </h2>
+                            <p className="text-purple-200 mb-6">
+                                Automatically punish repeat offenders based on warning count.
+                            </p>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <input
+                                            type="checkbox"
+                                            id="escalatingEnabled"
+                                            checked={escalatingEnabled}
+                                            onChange={(e) => setEscalatingEnabled(e.target.checked)}
+                                            className="w-5 h-5 rounded bg-white/5 border-white/20"
+                                        />
+                                        <label htmlFor="escalatingEnabled" className="text-white flex-1">
+                                            <span className="font-semibold text-lg">Enable Escalation</span>
+                                            <p className="text-sm text-purple-300">Take action after X warnings</p>
+                                        </label>
+                                    </div>
+
+                                    {escalatingEnabled && (
+                                        <div className="mt-4 space-y-4">
+                                            <div>
+                                                <label className="block text-purple-200 text-sm mb-1">Warning Threshold</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="10"
+                                                    value={warnToTimeoutThreshold}
+                                                    onChange={(e) => setWarnToTimeoutThreshold(parseInt(e.target.value) || 3)}
+                                                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                                />
+                                                <p className="text-xs text-purple-300 mt-1">Number of warnings to trigger timeout</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-purple-200 text-sm mb-1">Timeout Duration (seconds)</label>
+                                                <input
+                                                    type="number"
+                                                    min="60"
+                                                    value={escalatingTimeoutDuration}
+                                                    onChange={(e) => setEscalatingTimeoutDuration(parseInt(e.target.value) || 600)}
+                                                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                                />
+                                                <p className="text-xs text-purple-300 mt-1">Default: 600s (10 minutes)</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Bad Words Filter */}
@@ -579,6 +708,168 @@ export default function AutomodPage() {
                                             )}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Advanced Filters (New Phase 4) */}
+                        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6">
+                            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                                🚀 Advanced Filters
+                            </h2>
+
+                            <div className="space-y-6">
+                                {/* Duplicate Message Detection */}
+                                <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <input
+                                            type="checkbox"
+                                            id="duplicate"
+                                            checked={duplicateEnabled}
+                                            onChange={(e) => setDuplicateEnabled(e.target.checked)}
+                                            className="w-5 h-5 rounded bg-white/5 border-white/20"
+                                        />
+                                        <label htmlFor="duplicate" className="text-white flex-1">
+                                            <span className="font-semibold text-lg">📝 Duplicate Message Detection</span>
+                                            <p className="text-sm text-purple-300">Prevent users from sending the same message repeatedly</p>
+                                        </label>
+                                    </div>
+
+                                    {duplicateEnabled && (
+                                        <div className="grid grid-cols-2 gap-4 mt-4 pl-8">
+                                            <div>
+                                                <label className="block text-purple-200 text-sm mb-1">Time Window (seconds)</label>
+                                                <input
+                                                    type="number"
+                                                    value={duplicateTimeWindow}
+                                                    onChange={(e) => setDuplicateTimeWindow(parseInt(e.target.value) || 60)}
+                                                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-purple-200 text-sm mb-1">Threshold (count)</label>
+                                                <input
+                                                    type="number"
+                                                    value={duplicateThreshold}
+                                                    onChange={(e) => setDuplicateThreshold(parseInt(e.target.value) || 3)}
+                                                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Emoji Spam */}
+                                <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <input
+                                            type="checkbox"
+                                            id="emojiSpam"
+                                            checked={emojiSpamEnabled}
+                                            onChange={(e) => setEmojiSpamEnabled(e.target.checked)}
+                                            className="w-5 h-5 rounded bg-white/5 border-white/20"
+                                        />
+                                        <label htmlFor="emojiSpam" className="text-white flex-1">
+                                            <span className="font-semibold text-lg">😀 Emoji Spam</span>
+                                            <p className="text-sm text-purple-300">Limit the number of emojis per message</p>
+                                        </label>
+                                    </div>
+
+                                    {emojiSpamEnabled && (
+                                        <div className="mt-4 pl-8">
+                                            <label className="block text-purple-200 text-sm mb-1">Max Emojis</label>
+                                            <input
+                                                type="number"
+                                                value={maxEmojis}
+                                                onChange={(e) => setMaxEmojis(parseInt(e.target.value) || 10)}
+                                                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Newline Spam */}
+                                <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <input
+                                            type="checkbox"
+                                            id="newlineSpam"
+                                            checked={newlineSpamEnabled}
+                                            onChange={(e) => setNewlineSpamEnabled(e.target.checked)}
+                                            className="w-5 h-5 rounded bg-white/5 border-white/20"
+                                        />
+                                        <label htmlFor="newlineSpam" className="text-white flex-1">
+                                            <span className="font-semibold text-lg">📜 Newline Spam (Vertical Spam)</span>
+                                            <p className="text-sm text-purple-300">Limit the number of newlines in a message</p>
+                                        </label>
+                                    </div>
+
+                                    {newlineSpamEnabled && (
+                                        <div className="mt-4 pl-8">
+                                            <label className="block text-purple-200 text-sm mb-1">Max Newlines</label>
+                                            <input
+                                                type="number"
+                                                value={maxNewlines}
+                                                onChange={(e) => setMaxNewlines(parseInt(e.target.value) || 10)}
+                                                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Custom Regex Filters */}
+                                <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="text-white flex-1">
+                                            <span className="font-semibold text-lg">🔍 Custom Regex Filters</span>
+                                            <p className="text-sm text-purple-300">Add custom RegEx patterns to block specific content</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 space-y-4">
+                                        {regexFilters.map((filter, index) => (
+                                            <div key={index} className="flex gap-2 items-start">
+                                                <input
+                                                    type="text"
+                                                    value={filter.pattern}
+                                                    onChange={(e) => {
+                                                        const newFilters = [...regexFilters];
+                                                        newFilters[index].pattern = e.target.value;
+                                                        setRegexFilters(newFilters);
+                                                    }}
+                                                    placeholder="Regex Pattern (e.g. ^bad.*)"
+                                                    className="flex-1 px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={filter.name || ''}
+                                                    onChange={(e) => {
+                                                        const newFilters = [...regexFilters];
+                                                        newFilters[index].name = e.target.value;
+                                                        setRegexFilters(newFilters);
+                                                    }}
+                                                    placeholder="Name (Optional)"
+                                                    className="w-32 px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const newFilters = regexFilters.filter((_, i) => i !== index);
+                                                        setRegexFilters(newFilters);
+                                                    }}
+                                                    className="px-3 py-2 bg-red-500/20 text-red-200 rounded-lg hover:bg-red-500/30"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        <button
+                                            onClick={() => setRegexFilters([...regexFilters, { pattern: '', name: '', action: 'delete' }])}
+                                            className="px-4 py-2 bg-indigo-600 rounded-lg text-white text-sm hover:bg-indigo-700"
+                                        >
+                                            + Add Regex Pattern
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

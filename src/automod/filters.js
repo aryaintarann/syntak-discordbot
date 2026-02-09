@@ -132,6 +132,83 @@ export function checkCapsSpam(content, threshold = 0.7, minLength = 10) {
 }
 
 /**
+ * Check for emoji spam
+ */
+export function checkEmojiSpam(content, maxEmojis = 10) {
+    // Regex to match unicode emojis and discord custom emojis <a:name:id>
+    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|<a?:\w+:\d+>)/g;
+    const emojis = content.match(emojiRegex);
+    const emojiCount = emojis ? emojis.length : 0;
+
+    if (emojiCount > maxEmojis) {
+        return {
+            violated: true,
+            type: violationTypes.EMOJI_SPAM,
+            details: `Too many emojis: ${emojiCount} (max: ${maxEmojis})`,
+            emojiCount
+        };
+    }
+    return { violated: false };
+}
+
+/**
+ * Check for newline spam
+ */
+export function checkNewlineSpam(content, maxNewlines = 10) {
+    const newlines = (content.match(/\n/g) || []).length;
+
+    if (newlines > maxNewlines) {
+        return {
+            violated: true,
+            type: violationTypes.NEWLINE_SPAM,
+            details: `Too many newlines: ${newlines} (max: ${maxNewlines})`,
+            newlineCount: newlines
+        };
+    }
+    return { violated: false };
+}
+
+/**
+ * Check duplicate messages (requires state passed in options)
+ */
+export function checkDuplicateMessage(content, previousMessages = []) {
+    // Check if content matches any recent message
+    // previousMessages should be array of { content: string, timestamp: number }
+    const isDuplicate = previousMessages.some(msg => msg.content === content);
+
+    if (isDuplicate) {
+        return {
+            violated: true,
+            type: violationTypes.DUPLICATE,
+            details: 'Repeated message detected'
+        };
+    }
+    return { violated: false };
+}
+
+/**
+ * Check custom regex filters
+ */
+export function checkRegexFilters(content, filters = []) {
+    // filters: [{ pattern: string, flags: string, name: string }]
+    for (const filter of filters) {
+        try {
+            const regex = new RegExp(filter.pattern, filter.flags || 'i');
+            if (regex.test(content)) {
+                return {
+                    violated: true,
+                    type: violationTypes.REGEX_FILTER,
+                    details: `Matched filter: ${filter.name || 'Custom Patern'}`
+                };
+            }
+        } catch (e) {
+            console.error(`Invalid regex filter: ${filter.pattern}`, e);
+        }
+    }
+    return { violated: false };
+}
+
+/**
  * Run all filters on message content
  */
 export function checkAllFilters(content, options = {}) {
@@ -141,12 +218,21 @@ export function checkAllFilters(content, options = {}) {
         checkMassMentionFilter = true,
         checkInviteLinksFilter = true,
         checkCapsSpamFilter = false,
+        checkEmojiSpamFilter = false,
+        checkNewlineSpamFilter = false,
+        checkDuplicateFilter = false,
+        checkRegex = false,
+
         customBadWords = null,
         caseSensitive = false,
         maxLinks = 3,
         maxMentions = 5,
+        maxEmojis = 10,
+        maxNewlines = 10,
         allowOwnServer = true,
-        guildInviteCodes = []
+        guildInviteCodes = [],
+        previousMessages = [], // For duplicate check
+        regexFilters = [] // For custom regex
     } = options;
 
     const violations = [];
@@ -173,6 +259,26 @@ export function checkAllFilters(content, options = {}) {
 
     if (checkCapsSpamFilter) {
         const result = checkCapsSpam(content);
+        if (result.violated) violations.push(result);
+    }
+
+    if (checkEmojiSpamFilter) {
+        const result = checkEmojiSpam(content, maxEmojis);
+        if (result.violated) violations.push(result);
+    }
+
+    if (checkNewlineSpamFilter) {
+        const result = checkNewlineSpam(content, maxNewlines);
+        if (result.violated) violations.push(result);
+    }
+
+    if (checkDuplicateFilter) {
+        const result = checkDuplicateMessage(content, previousMessages);
+        if (result.violated) violations.push(result);
+    }
+
+    if (checkRegex) {
+        const result = checkRegexFilters(content, regexFilters);
         if (result.violated) violations.push(result);
     }
 

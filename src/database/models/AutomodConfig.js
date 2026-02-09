@@ -29,7 +29,21 @@ export async function getAutomodConfig(guildId) {
                 massMention: true,
                 inviteLinks: true,
                 caps: false
-            }
+            },
+            duplicateDetection: {
+                enabled: false,
+                threshold: 3,
+                timeWindow: 60
+            },
+            emojiSpam: {
+                enabled: false,
+                maxEmojis: 10
+            },
+            newlineSpam: {
+                enabled: false,
+                maxNewlines: 10
+            },
+            regexFilters: []
         };
 
         if (config.config_data) {

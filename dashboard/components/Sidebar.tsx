@@ -19,10 +19,11 @@ export default function Sidebar({ serverId, serverName, serverIcon }: SidebarPro
         { name: 'Features', icon: '🎛️', href: `/server/${serverId}/features` },
         { name: 'Auto-Moderation', icon: '🤖', href: `/server/${serverId}/automod` },
         { name: 'Logging', icon: '📋', href: `/server/${serverId}/logging` },
-        { name: 'Security', icon: '🔒', href: `/server/${serverId}/security`, disabled: true },
-        { name: 'Mod Logs', icon: '📝', href: `/server/${serverId}/modlog`, disabled: true },
-        { name: 'Users', icon: '👥', href: `/server/${serverId}/users`, disabled: true },
-        { name: 'Statistics', icon: '📊', href: `/server/${serverId}/stats`, disabled: true },
+        { name: 'Security', icon: '🔒', href: `/server/${serverId}/security` },
+        { name: 'Mod Logs', icon: '📝', href: `/server/${serverId}/modlogs`, disabled: false },
+        { name: 'Warnings', icon: '⚠️', href: `/server/${serverId}/warnings`, disabled: false },
+        { name: 'Users', icon: '👥', href: `/server/${serverId}/users`, disabled: false },
+        { name: 'Statistics', icon: '📊', href: `/server/${serverId}/stats`, disabled: false },
     ]
 
     return (
