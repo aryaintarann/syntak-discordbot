@@ -103,17 +103,11 @@ export default function AutomodPage() {
 
     const fetchChannels = async () => {
         try {
-            console.log('Fetching channels for server:', serverId)
             const res = await fetch(`/api/guilds/${serverId}/channels`)
-            console.log('Channels API response status:', res.status)
 
             if (res.ok) {
                 const data = await res.json()
-                console.log('Channels data received:', data)
                 setChannels(data)
-            } else {
-                const errorText = await res.text()
-                console.error('Failed to fetch channels. Status:', res.status, 'Error:', errorText)
             }
         } catch (error) {
             console.error('Error fetching channels:', error)
