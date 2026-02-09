@@ -100,14 +100,11 @@ export async function disableLockdown(guild, options = {}) {
 
                     originalPermissions.delete(channelId);
                 } else {
-                    // Default: allow send messages
-                    await channel.permissionOverwrites.edit(everyoneRole, {
-                        SendMessages: null, // null = inherit from role
-                        AddReactions: null,
-                        CreatePublicThreads: null,
-                        CreatePrivateThreads: null,
-                        SendMessagesInThreads: null
-                    }, { reason });
+                    // No stored permissions - delete the override to restore defaults
+                    const existingOverride = channel.permissionOverwrites.cache.get(everyoneRole.id);
+                    if (existingOverride) {
+                        await existingOverride.delete(reason);
+                    }
                 }
 
                 unlockResults.success.push(channel.name);
@@ -200,27 +197,54 @@ export async function lockChannel(channel, reason = 'Channel locked') {
  */
 export async function unlockChannel(channel, reason = 'Channel unlocked') {
     try {
+        console.log(`[Unlockdown] Starting unlock for channel: ${channel.name} (${channel.id})`);
+
         const everyoneRole = channel.guild.roles.everyone;
+        console.log(`[Unlockdown] @everyone role ID: ${everyoneRole.id}`);
 
         const original = originalPermissions.get(channel.id);
+        console.log(`[Unlockdown] Original permissions stored: ${original ? 'YES' : 'NO'}`);
+
+        // Check current permissions
+        const currentOverride = channel.permissionOverwrites.cache.get(everyoneRole.id);
+        console.log(`[Unlockdown] Current override exists: ${currentOverride ? 'YES' : 'NO'}`);
+        if (currentOverride) {
+            console.log(`[Unlockdown] Current permissions - Allow: ${currentOverride.allow.bitfield}, Deny: ${currentOverride.deny.bitfield}`);
+        }
 
         if (original) {
+            // Restore exact original permissions
+            console.log(`[Unlockdown] Restoring original permissions - Allow: ${original.allow}, Deny: ${original.deny}`);
             await channel.permissionOverwrites.edit(everyoneRole, {
                 allow: BigInt(original.allow),
                 deny: BigInt(original.deny)
             }, { reason });
 
             originalPermissions.delete(channel.id);
+            console.log(`[Unlockdown] ✅ Restored original permissions`);
         } else {
-            await channel.permissionOverwrites.edit(everyoneRole, {
-                SendMessages: null,
-                AddReactions: null
-            }, { reason });
+            // No stored permissions - delete the override entirely to restore defaults
+            const existingOverride = channel.permissionOverwrites.cache.get(everyoneRole.id);
+            if (existingOverride) {
+                console.log(`[Unlockdown] Deleting permission override for @everyone...`);
+                await existingOverride.delete(reason);
+                console.log(`[Unlockdown] ✅ Deleted permission override`);
+            } else {
+                console.log(`[Unlockdown] ⚠️ No override to delete - channel should already be unlocked`);
+            }
+        }
+
+        // Verify after unlock
+        const afterOverride = channel.permissionOverwrites.cache.get(everyoneRole.id);
+        console.log(`[Unlockdown] After unlock - Override exists: ${afterOverride ? 'YES' : 'NO'}`);
+        if (afterOverride) {
+            console.log(`[Unlockdown] ⚠️ WARNING: Override still exists! Allow: ${afterOverride.allow.bitfield}, Deny: ${afterOverride.deny.bitfield}`);
         }
 
         return true;
     } catch (error) {
-        console.error('Error unlocking channel:', error);
+        console.error('[Unlockdown] ❌ Error unlocking channel:', error);
+        console.error('[Unlockdown] Error details:', error.message, error.stack);
         return false;
     }
 }

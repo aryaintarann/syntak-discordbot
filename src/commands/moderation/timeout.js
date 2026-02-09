@@ -3,6 +3,7 @@ import { canModerate } from '../../utils/permissions.js';
 import { logModAction } from '../../database/models/ModLog.js';
 import { createModActionEmbed, createErrorEmbed, createSuccessEmbed } from '../../utils/embedBuilder.js';
 import { parseTime, formatTime, validateTimeoutDuration } from '../../utils/timeParser.js';
+import { trackTimeout } from '../../utils/timeoutTracker.js';
 import pool from '../../database/database.js';
 
 export default {
@@ -19,7 +20,7 @@ export default {
         .addStringOption(option =>
             option
                 .setName('duration')
-                .setDescription('Duration (e.g., 10m, 1h, 1d)')
+                .setDescription('Duration (e.g., 5m, 1h, 30 = 30 minutes)')
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -31,37 +32,36 @@ export default {
 
     async execute(interaction) {
         try {
+            // Defer reply immediately to prevent timeout
+            await interaction.deferReply();
+
             const target = interaction.options.getMember('target');
             const durationString = interaction.options.getString('duration');
             const reason = interaction.options.getString('reason') || 'No reason provided';
 
             // Validations
             if (!target) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'User tidak ditemukan di server ini.')],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', 'User tidak ditemukan di server ini.')]
                 });
             }
 
             if (target.id === interaction.user.id) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout diri sendiri.')],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout diri sendiri.')]
                 });
             }
 
             if (target.id === interaction.client.user.id) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout diri saya sendiri.')],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout diri saya sendiri.')]
                 });
             }
 
             // Check role hierarchy
             if (!canModerate(interaction.member, target)) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout member dengan role yang lebih tinggi.')],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', 'Anda tidak bisa timeout member dengan role yang lebih tinggi.')]
                 });
             }
 
@@ -71,17 +71,15 @@ export default {
                 duration = parseTime(durationString);
                 validateTimeoutDuration(duration);
             } catch (error) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', error.message)],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', error.message)]
                 });
             }
 
             // Check if bot can moderate
             if (!target.moderatable) {
-                return interaction.reply({
-                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout member ini. Role mereka mungkin lebih tinggi dari role saya.')],
-                    ephemeral: true
+                return interaction.editReply({
+                    embeds: [createErrorEmbed('Error', 'Saya tidak bisa timeout member ini. Role mereka mungkin lebih tinggi dari role saya.')]
                 });
             }
 
@@ -94,6 +92,10 @@ export default {
 
             // Timeout the member
             await target.timeout(duration, reason);
+
+            // Track timeout for expiry notification
+            const expiryTime = Date.now() + duration;
+            await trackTimeout(target.id, interaction.guild.id, expiryTime);
 
             // Log to database
             await logModAction(
@@ -108,7 +110,7 @@ export default {
             );
 
             // Send confirmation
-            await interaction.reply({
+            await interaction.editReply({
                 embeds: [createSuccessEmbed(
                     'Member Timed Out',
                     `${target.user.tag} telah di-timeout selama ${formatTime(duration)}.\n**Alasan:** ${reason}`
@@ -127,9 +129,9 @@ export default {
             );
 
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+                await interaction.editReply({ embeds: [errorEmbed] });
             } else {
-                await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+                await interaction.editReply({ embeds: [errorEmbed] });
             }
         }
     }

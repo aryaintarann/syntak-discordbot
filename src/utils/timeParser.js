@@ -2,19 +2,38 @@ import ms from 'ms';
 
 /**
  * Parse time duration string to milliseconds
- * Examples: "1h", "30m", "7d", "1w"
+ * Examples: "1h", "30m", "7d", "1w", "60" (defaults to minutes)
  */
 export function parseTime(timeString) {
     try {
-        const duration = ms(timeString);
+        // Clean the input
+        const cleaned = timeString.trim();
+
+        // If it's just a number, default to minutes
+        if (/^\d+$/.test(cleaned)) {
+            const minutes = parseInt(cleaned, 10);
+            if (minutes <= 0) {
+                throw new Error('Durasi harus lebih dari 0');
+            }
+            return minutes * 60 * 1000; // Convert to milliseconds
+        }
+
+        // Use ms library for formatted strings
+        const duration = ms(cleaned);
+
         if (!duration || duration < 0) {
             throw new Error('Invalid time format');
         }
+
         return duration;
     } catch (error) {
-        throw new Error('Format waktu tidak valid. Contoh: 1h, 30m, 7d, 1w');
+        if (error.message.includes('Durasi harus')) {
+            throw error;
+        }
+        throw new Error('Format waktu tidak valid. Contoh: 5m, 1h, 30 (default: menit), 7d');
     }
 }
+
 
 /**
  * Format milliseconds to human-readable string

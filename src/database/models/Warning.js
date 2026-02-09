@@ -1,4 +1,4 @@
-import pool from './database.js';
+import pool from '../database.js';
 
 /**
  * Add a warning to a user

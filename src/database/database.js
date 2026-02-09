@@ -90,6 +90,19 @@ export async function initializeDatabase() {
             )
         `);
 
+        // Create active_timeouts table for tracking timeout expiry
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS active_timeouts (
+                user_id VARCHAR(20) NOT NULL,
+                guild_id VARCHAR(20) NOT NULL,
+                expiry_time BIGINT NOT NULL,
+                created_at BIGINT NOT NULL,
+                notified BOOLEAN DEFAULT 0,
+                PRIMARY KEY (user_id, guild_id),
+                INDEX idx_expiry (expiry_time, notified)
+            )
+        `);
+
         connection.release();
         console.log('✅ Database tables initialized successfully');
     } catch (error) {

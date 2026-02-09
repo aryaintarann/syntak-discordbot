@@ -1,5 +1,6 @@
 import { Events } from 'discord.js';
 import { initializeDatabase, cleanOldJoinEntries } from '../database/database.js';
+import { startTimeoutChecker } from '../utils/timeoutChecker.js';
 
 export default {
     name: Events.ClientReady,
@@ -16,6 +17,9 @@ export default {
             console.error('❌ Failed to initialize database:', error);
             process.exit(1);
         }
+
+        // Start timeout expiry checker
+        startTimeoutChecker(client);
 
         // Clean old join entries every hour
         setInterval(async () => {
