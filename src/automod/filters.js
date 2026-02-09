@@ -3,9 +3,12 @@ import { badWords, patterns, violationTypes } from '../config/automod.js';
 /**
  * Check for bad words in message content
  */
-export function checkBadWords(content, caseSensitive = false) {
+export function checkBadWords(content, customBadWords = null, caseSensitive = false) {
+    // Use custom bad words from database if provided, otherwise use default
+    const wordList = customBadWords || badWords;
+
     const text = caseSensitive ? content : content.toLowerCase();
-    const wordsToCheck = caseSensitive ? badWords : badWords.map(w => w.toLowerCase());
+    const wordsToCheck = caseSensitive ? wordList : wordList.map(w => w.toLowerCase());
 
     for (const badWord of wordsToCheck) {
         // Check for whole word match (with word boundaries)
@@ -138,6 +141,7 @@ export function checkAllFilters(content, options = {}) {
         checkMassMentionFilter = true,
         checkInviteLinksFilter = true,
         checkCapsSpamFilter = false,
+        customBadWords = null,
         caseSensitive = false,
         maxLinks = 3,
         maxMentions = 5,
@@ -148,7 +152,7 @@ export function checkAllFilters(content, options = {}) {
     const violations = [];
 
     if (checkBadWordsFilter) {
-        const result = checkBadWords(content, caseSensitive);
+        const result = checkBadWords(content, customBadWords, caseSensitive);
         if (result.violated) violations.push(result);
     }
 

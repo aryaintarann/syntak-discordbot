@@ -16,9 +16,12 @@ export async function getGuildConfig(guildId) {
             return await getGuildConfig(guildId);
         }
 
-        // Parse JSON fields
+        // Parse JSON fields - check if already parsed
         if (rows[0].config_data) {
-            rows[0].config_data = JSON.parse(rows[0].config_data);
+            if (typeof rows[0].config_data === 'string') {
+                rows[0].config_data = JSON.parse(rows[0].config_data);
+            }
+            // If it's already an object, leave it as is
         }
 
         return rows[0];

@@ -3,6 +3,7 @@ import { checkAllFilters } from '../automod/filters.js';
 import { enforceViolation, checkSpam } from '../automod/enforcer.js';
 import { autoModConfig } from '../config/automod.js';
 import { getGuildConfig } from '../database/models/GuildConfig.js';
+import { getAutomodConfig } from '../database/models/AutomodConfig.js';
 import { hasExemptRole, isModerator } from '../utils/permissions.js';
 
 export default {
@@ -24,11 +25,39 @@ export default {
             // Skip moderators/admins
             if (isModerator(message.member)) return;
 
+            // Get custom automod config from database
+            const customAutomod = await getAutomodConfig(message.guild.id);
+
+            // Merge with default config
+            const spamConfig = customAutomod?.spam || autoModConfig.spam;
+            const customBadWords = customAutomod?.badWords || null;
+
+            // Parse filter config - handle both old and new structure
+            const filters = customAutomod?.filters || {};
+            const filterConfig = {
+                linkSpam: {
+                    enabled: typeof filters.linkSpam === 'object' ? filters.linkSpam.enabled : (filters.linkSpam !== false),
+                    exemptChannels: typeof filters.linkSpam === 'object' ? (filters.linkSpam.exemptChannels || []) : []
+                },
+                massMention: {
+                    enabled: typeof filters.massMention === 'object' ? filters.massMention.enabled : (filters.massMention !== false),
+                    exemptChannels: typeof filters.massMention === 'object' ? (filters.massMention.exemptChannels || []) : []
+                },
+                inviteLinks: {
+                    enabled: typeof filters.inviteLinks === 'object' ? filters.inviteLinks.enabled : (filters.inviteLinks !== false),
+                    exemptChannels: typeof filters.inviteLinks === 'object' ? (filters.inviteLinks.exemptChannels || []) : []
+                },
+                caps: {
+                    enabled: typeof filters.caps === 'object' ? filters.caps.enabled : (filters.caps === true),
+                    exemptChannels: typeof filters.caps === 'object' ? (filters.caps.exemptChannels || []) : []
+                }
+            };
+
             // Check spam first
             const spamCheck = checkSpam(
                 message.author.id,
-                autoModConfig.spam.messageThreshold,
-                autoModConfig.spam.timeWindow
+                spamConfig.messageThreshold,
+                spamConfig.timeWindow * 1000 // Convert to milliseconds
             );
 
             if (spamCheck.isSpam && autoModConfig.spam.enabled) {
@@ -49,12 +78,15 @@ export default {
                 return;
             }
 
-            // Check content filters
+            // Check content filters with per-filter channel exemptions
+            const channelId = message.channel.id;
             const filterResults = checkAllFilters(message.content, {
-                checkBadWordsFilter: autoModConfig.badWords.enabled,
-                checkLinkSpamFilter: autoModConfig.linkSpam.enabled,
-                checkMassMentionFilter: autoModConfig.massMention.enabled,
-                checkInviteLinksFilter: autoModConfig.inviteLinks.enabled,
+                checkBadWordsFilter: customBadWords ? customBadWords.length > 0 : autoModConfig.badWords.enabled,
+                checkLinkSpamFilter: filterConfig.linkSpam.enabled && !filterConfig.linkSpam.exemptChannels.includes(channelId),
+                checkMassMentionFilter: filterConfig.massMention.enabled && !filterConfig.massMention.exemptChannels.includes(channelId),
+                checkInviteLinksFilter: filterConfig.inviteLinks.enabled && !filterConfig.inviteLinks.exemptChannels.includes(channelId),
+                checkCapsSpamFilter: filterConfig.caps.enabled && !filterConfig.caps.exemptChannels.includes(channelId),
+                customBadWords: customBadWords, // Pass custom bad words from dashboard
                 caseSensitive: autoModConfig.badWords.caseSensitive,
                 maxLinks: autoModConfig.linkSpam.maxLinks,
                 maxMentions: autoModConfig.massMention.maxMentions,
@@ -80,6 +112,9 @@ export default {
                             break;
                         case 'invite_link':
                             violationConfig = autoModConfig.inviteLinks;
+                            break;
+                        case 'caps_spam':
+                            violationConfig = { action: 'delete', sendWarning: true };
                             break;
                         default:
                             continue;
