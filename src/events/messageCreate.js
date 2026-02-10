@@ -5,6 +5,7 @@ import { autoModConfig } from '../config/automod.js';
 import { getGuildConfig } from '../database/models/GuildConfig.js';
 import { getAutomodConfig } from '../database/models/AutomodConfig.js';
 import { hasExemptRole, isModerator } from '../utils/permissions.js';
+import FeatureManager from '../utils/featureManager.js';
 
 export default {
     name: Events.MessageCreate,

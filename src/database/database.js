@@ -155,6 +155,74 @@ export async function initializeDatabase() {
             )
         `);
 
+        // Ticket Config
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS ticket_config (
+                guild_id VARCHAR(20) PRIMARY KEY,
+                category_id VARCHAR(20),
+                transcript_channel_id VARCHAR(20),
+                welcome_message TEXT,
+                staff_role_id VARCHAR(20)
+            )
+        `);
+
+        // Tickets
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20),
+                user_id VARCHAR(20),
+                channel_id VARCHAR(20),
+                created_at BIGINT,
+                closed_at BIGINT,
+                transcript_url TEXT,
+                INDEX idx_guild_user (guild_id, user_id)
+            )
+        `);
+
+        // Welcomer Config
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS welcomer_config (
+                guild_id VARCHAR(20) PRIMARY KEY,
+                welcome_channel_id VARCHAR(20),
+                welcome_message TEXT,
+                welcome_background_url TEXT,
+                welcome_enabled BOOLEAN DEFAULT FALSE,
+                goodbye_channel_id VARCHAR(20),
+                goodbye_message TEXT,
+                goodbye_background_url TEXT,
+                goodbye_enabled BOOLEAN DEFAULT FALSE
+            )
+        `);
+
+        // Reaction Roles
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS reaction_roles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20),
+                message_id VARCHAR(20),
+                channel_id VARCHAR(20),
+                emoji VARCHAR(255),
+                role_id VARCHAR(20),
+                INDEX idx_message (message_id)
+            )
+        `);
+
+        // Giveaways
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS giveaways (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guild_id VARCHAR(20),
+                channel_id VARCHAR(20),
+                message_id VARCHAR(20),
+                prize TEXT,
+                end_time BIGINT,
+                winners_count INT,
+                ended BOOLEAN DEFAULT FALSE,
+                host_id VARCHAR(20)
+            )
+        `);
+
         connection.release();
         console.log('✅ Database tables initialized successfully');
     } catch (error) {

@@ -9,6 +9,12 @@ export default {
         console.log(`✅ Logged in as ${client.user.tag}`);
         console.log(`📊 Serving ${client.guilds.cache.size} servers`);
 
+        // Initializing managers
+
+        const { GiveawayManager } = await import('../utils/giveawayManager.js');
+        const giveawayManager = new GiveawayManager(client);
+        giveawayManager.start();
+
         // Initialize database
         try {
             await initializeDatabase();

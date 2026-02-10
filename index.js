@@ -14,11 +14,14 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildMessageReactions
     ],
     partials: [
         Partials.Message,
         Partials.Channel,
-        Partials.GuildMember
+        Partials.GuildMember,
+        Partials.Reaction,
+        Partials.User
     ]
 });
 

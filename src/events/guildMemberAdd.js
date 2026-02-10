@@ -95,6 +95,39 @@ export default {
                 }
             }
 
+            // 5. Welcomer
+            try {
+                const [welcomerRows] = await pool.query('SELECT * FROM welcomer_config WHERE guild_id = ?', [member.guild.id]);
+                const welcomerConfig = welcomerRows[0];
+
+                if (welcomerConfig && welcomerConfig.welcome_enabled && welcomerConfig.welcome_channel_id) {
+                    const channel = member.guild.channels.cache.get(welcomerConfig.welcome_channel_id);
+                    if (channel && channel.isTextBased()) {
+                        const { generateWelcomeImage } = await import('../utils/welcomer.js');
+                        // Construct proper config object for utility
+                        const configForImage = {
+                            message: welcomerConfig.welcome_message,
+                            background_url: welcomerConfig.welcome_background_url
+                        };
+                        const buffer = await generateWelcomeImage(member, configForImage, 'welcome');
+
+                        const messageText = welcomerConfig.welcome_message
+                            ? welcomerConfig.welcome_message
+                                .replace(/{user}/g, `<@${member.id}>`)
+                                .replace(/{server}/g, member.guild.name)
+                                .replace(/{memberCount}/g, member.guild.memberCount)
+                            : `Welcome <@${member.id}> to **${member.guild.name}**!`;
+
+                        await channel.send({
+                            content: messageText,
+                            files: [{ attachment: buffer, name: 'welcome.png' }]
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Error in Welcomer:', err);
+            }
+
         } catch (error) {
             console.error('Error in guildMemberAdd event:', error);
         }

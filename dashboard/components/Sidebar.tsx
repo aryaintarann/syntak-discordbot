@@ -24,6 +24,10 @@ export default function Sidebar({ serverId, serverName, serverIcon }: SidebarPro
         { name: 'Warnings', icon: '⚠️', href: `/server/${serverId}/warnings`, disabled: false },
         { name: 'Users', icon: '👥', href: `/server/${serverId}/users`, disabled: false },
         { name: 'Statistics', icon: '📊', href: `/server/${serverId}/stats`, disabled: false },
+        { name: 'Tickets', icon: '🎫', href: `/server/${serverId}/tickets`, disabled: false },
+        { name: 'Welcomer', icon: '👋', href: `/server/${serverId}/welcomer`, disabled: false },
+        { name: 'Reaction Roles', icon: '🎭', href: `/server/${serverId}/reaction-roles`, disabled: false },
+        { name: 'Giveaways', icon: '🎁', href: `/server/${serverId}/giveaways`, disabled: false },
     ]
 
     return (
